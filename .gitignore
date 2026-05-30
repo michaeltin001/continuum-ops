@@ -1,0 +1,6 @@
+continuum-key.pem
+continuum-ops-hackathon.txt
+.venv/
+docker_run_nim.sh
+.env
+old/
