@@ -4,3 +4,6 @@ continuum-ops-hackathon.txt
 .env
 old/
 cekura_response.json
+summary.json
+__pycache__
+test_synthetic_data.jsonl

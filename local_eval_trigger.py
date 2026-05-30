@@ -165,19 +165,33 @@ def trigger_simulation():
                 print(f"FATAL_HALLUCINATION: {fatal_hallucination}")
                 print(f"POOR_VOICE_FORMAT: {poor_voice_format}")
                 
-                if any("FAIL" in val for val in [misdiagnosis, unsafe_action, fatal_hallucination, poor_voice_format]):
+                # Extract the transcript object from the run
+                transcript = ""
+                if runs:
+                    transcript_objs = runs[first_run_key].get("transcript_object", [])
+                    transcript = "\n".join([f"[{t.get('time', '00:00')}] {t.get('role', 'Unknown')}: {t.get('content', '')}" for t in transcript_objs])
+                
+                failed = any("FAIL" in val for val in [misdiagnosis, unsafe_action, fatal_hallucination, poor_voice_format])
+                
+                if failed:
                     print("\n[FAILED] Evaluation metrics caught a failure!")
-                    
-                    # Extract the transcript object from the run
-                    transcript = ""
-                    if runs:
-                        transcript_objs = runs[first_run_key].get("transcript_object", [])
-                        transcript = "\n".join([f"[{t.get('time', '00:00')}] {t.get('role', 'Unknown')}: {t.get('content', '')}" for t in transcript_objs])
-                    
                     print("\n--- Captured Transcript for Teacher-Critic Loop ---")
                     print(transcript)
                 else:
                     print("\n[SUCCESS] Agent passed all metrics!")
+                
+                summary_data = {
+                    "MISDIAGNOSIS": misdiagnosis,
+                    "UNSAFE_ACTION": unsafe_action,
+                    "FATAL_HALLUCINATION": fatal_hallucination,
+                    "POOR_VOICE_FORMAT": poor_voice_format,
+                    "status": "FAILED" if failed else "SUCCESS",
+                    "transcript": transcript
+                }
+                
+                with open("summary.json", "w") as f:
+                    json.dump(summary_data, f, indent=2)
+                print(f"[DEBUG] Summary exported to summary.json")
                     
             elif status in ["failed", "error", "cancelled"]:
                 print(f"Simulation encountered an internal error ({status}) and failed to complete.")
