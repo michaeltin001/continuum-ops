@@ -220,5 +220,12 @@ async def bot(runner_args: RunnerArguments):
     await run_bot(transport)
 
 if __name__ == "__main__":
-    from pipecat.runner.run import main
-    main()
+    import asyncio
+    
+    room_url = os.getenv("DAILY_ROOM_URL")
+    if room_url:
+        runner_args = DailyRunnerArguments(room_url=room_url, token="")
+        asyncio.run(bot(runner_args))
+    else:
+        from pipecat.runner.run import main
+        main()
