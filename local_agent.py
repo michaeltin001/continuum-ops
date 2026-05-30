@@ -25,7 +25,8 @@ from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.openai.llm import OpenAILLMService
 
 # Runner args copied from reference files as specified in Phase 2
-from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments
+from pipecat.transports.daily.transport import DailyParams, DailyTransport
+from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments, DailyRunnerArguments
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
@@ -193,9 +194,18 @@ async def bot(runner_args: RunnerArguments):
     """Main bot entry point to accept local or Cekura-driven WebRTC requests."""
     
     match runner_args:
+        case DailyRunnerArguments():
+            transport = DailyTransport(
+                room_url=runner_args.room_url,
+                token=runner_args.token,
+                bot_name="Continuum-Ops",
+                params=DailyParams(
+                    audio_in_enabled=True,
+                    audio_out_enabled=True,
+                ),
+            )
         case SmallWebRTCRunnerArguments():
             webrtc_connection: SmallWebRTCConnection = runner_args.webrtc_connection
-
             transport = SmallWebRTCTransport(
                 webrtc_connection=webrtc_connection,
                 params=TransportParams(
