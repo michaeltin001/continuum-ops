@@ -27,6 +27,7 @@ uv venv && source .venv/bin/activate
 
 # Install Pipecat with specific provider extras and observability
 uv pip install "pipecat-ai[deepgram,cartesia,openai]" daily-python boto3 anthropic python-dotenv requests logfire langsmith python-dotenv
+uv pip install fastapi pipecat-ai[webrtc] pipecat-ai[runner] 
 ```
 
 ```
