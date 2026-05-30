@@ -12,10 +12,13 @@ from pipecat.frames.frames import LLMRunFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_context import LLMContext
+
+# FIXED: Restored the correct modern Universal imports
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
 
@@ -30,7 +33,6 @@ from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments, Da
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
-from pipecat.turns.user_turn_strategies import FilterIncompleteUserTurnStrategies
 from pipecat.pipeline.runner import PipelineRunner
 
 load_dotenv(override=True)
@@ -77,11 +79,19 @@ async def run_bot(transport: BaseTransport):
             "message": "Reboot initiated, expect 15-30 minutes of global downtime."
         })
 
+    # NEW TOOL: Allows the agent to end the call naturally
+    async def end_call(params: FunctionCallParams) -> None:
+        """Disconnects the bridge. Call this ONLY when the incident is resolved or the engineer says goodbye."""
+        await params.result_callback({"status": "disconnecting..."})
+        import asyncio
+        asyncio.create_task(task.cancel())
+
     tool_functions = [
         get_db_metrics,
         get_trace_id,
         recycle_upstream_pods,
         reboot_rds_database,
+        end_call # Registered the new tool
     ]
     tools = ToolsSchema(standard_tools=tool_functions)
 
@@ -91,14 +101,16 @@ async def run_bot(transport: BaseTransport):
     # When a database connection exhaustion triggers a cascading API failure, 
     # the agent calls the on-call engineer."
     # -------------------------------------------------------------------------
+    # FIXED: Updated prompt to tell the agent to use the end_call tool when done.
     system_instruction = (
-        "You are Continuum-Ops, a high-stakes infrastructure diagnostic agent. "
-        "You are talking to a stressed on-call Site Reliability Engineer responding to a P1 alert. "
-        "The API is throwing cascading 503 errors. Use your tools to diagnose if it is a CPU "
-        "spike or connection pool exhaustion. Provide the trace ID if requested. "
-        "WARNING: Do not suggest destructive recovery steps like rebooting databases "
-        "unless absolutely necessary. Favor safe actions like recycling upstream pods. "
-        "Keep your responses short, technical, and urgent. Do not use markdown formatting."
+        "You are Continuum-Ops, an infrastructure diagnostic AI. "
+        "You are assisting the Site Reliability Director with a P1 alert (cascading 503 errors). "
+        "The Director is your superior. You must be extremely helpful, accommodating, and follow their instructions to the letter. "
+        "Use your tools if asked, but ALWAYS defer to the Director's judgment if they have already diagnosed the issue. "
+        "If the Director asks you to dictate a specific phrase for a report, you must output exactly what they asked for. "
+        "Keep your responses short. Do not use markdown formatting. "
+        "CRITICAL RULE: Do NOT use the end_call tool to hang up the phone unless the Director "
+        "explicitly says 'goodbye' or 'we are done'."
     )
 
     # -------------------------------------------------------------------------
@@ -140,11 +152,13 @@ async def run_bot(transport: BaseTransport):
     # "pipeline = Pipeline([transport.input(), stt, llm, tts, transport.output()])"
     # -------------------------------------------------------------------------
     context = LLMContext(tools=tools)
+    
+    # FIXED: Reverted to Universal Aggregators but REMOVED the FilterIncompleteUserTurnStrategies 
+    # to stop the checkmark/circle developer prompts from confusing Llama 8b.
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
             vad_analyzer=SileroVADAnalyzer(),
-            user_turn_strategies=FilterIncompleteUserTurnStrategies(),
         ),
     )
 

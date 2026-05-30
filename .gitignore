@@ -3,3 +3,4 @@ continuum-ops-hackathon.txt
 .venv/
 .env
 old/
+cekura_response.json

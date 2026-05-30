@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import requests
 import subprocess
 from dotenv import load_dotenv
@@ -7,7 +8,7 @@ from dotenv import load_dotenv
 # Load environment variables (API keys for Daily and Cekura)
 load_dotenv(override=True)
 
-def generate_daily_room() -> str:
+def generate_daily_room() -> tuple[str, str]:
     daily_api_key = os.getenv("DAILY_API_KEY")
     if not daily_api_key:
         raise ValueError("DAILY_API_KEY environment variable is missing in .env")
@@ -27,17 +28,31 @@ def generate_daily_room() -> str:
     response.raise_for_status()
     
     room_data = response.json()
-    return room_data["url"]
+    room_url = room_data["url"]
+    room_name = room_data["name"]
+
+    token_url = "https://api.daily.co/v1/meeting-tokens"
+    token_payload = {
+        "properties": {
+            "room_name": room_name,
+            "is_owner": True,
+            "exp": int(time.time()) + 3600
+        }
+    }
+    token_response = requests.post(token_url, headers=headers, json=token_payload)
+    token_response.raise_for_status()
+    cekura_token = token_response.json()["token"]
+
+    return room_url, cekura_token
 
 def trigger_simulation():
-    # 1. Generate the WebRTC room
-    local_room_url = generate_daily_room()
+    # 1. Generate the WebRTC room and token
+    local_room_url, cekura_token = generate_daily_room()
     print(f"Generated Daily WebRTC Room: {local_room_url}")
 
-    # 2. Start the local agent (FIXED: Passed URL via Environment Variable)
+    # 2. Start the local agent
     print("Starting local_agent.py...")
     
-    # Copy current environment and inject the Daily Room URL
     env = os.environ.copy()
     env["DAILY_ROOM_URL"] = local_room_url
     
@@ -49,20 +64,22 @@ def trigger_simulation():
     time.sleep(5)
 
     # 3. Tell Cekura to join the room 
-    cekura_api_url = "https://api.cekura.ai/test_framework/v1/scenarios/run_scenarios/" 
+    cekura_api_url = "https://api.cekura.ai/test_framework/v1/scenarios-external/run_scenarios_pipecat/" 
     cekura_api_key = os.getenv("CEKURA_API_KEY")
     
     scenario_id = os.getenv("CEKURA_SCENARIO_ID", "0")
+    
     payload = {
-        "scenarios": [int(scenario_id)],
-        "agent_id": os.getenv("CEKURA_AGENT_ID"),
-        "agent_number": os.getenv("CEKURA_AGENT_NUMBER", "+15555555555"),
-        "connection_settings": {
-            "pipecat_room_url": local_room_url
-        }
+        "agent_id": int(os.getenv("CEKURA_AGENT_ID", "0")),
+        "scenarios": [
+            {
+                "scenario": int(scenario_id),
+                "pipecat_room_url": local_room_url,
+                "pipecat_token": cekura_token
+            }
+        ]
     }
 
-    # FIXED: Used Cekura's specific X-CEKURA-API-KEY header
     headers = {
         "X-CEKURA-API-KEY": cekura_api_key,
         "Content-Type": "application/json"
@@ -79,13 +96,12 @@ def trigger_simulation():
     trigger_data = response.json()
     print(f"Simulation Triggered! Cekura is joining the room.")
     
-    # Extract the ID safely based on Cekura's response structure
-    if "runs" in trigger_data and len(trigger_data["runs"]) > 0:
-        evaluation_id = trigger_data["runs"][0].get("id")
-    elif isinstance(trigger_data, list) and len(trigger_data) > 0:
-        evaluation_id = trigger_data[0].get("id")
-    else:
-        evaluation_id = trigger_data.get("id")
+    evaluation_id = trigger_data.get("id")
+    
+    if not evaluation_id:
+        print(f"Error: Could not extract Result ID from Cekura response: {trigger_data}")
+        agent_process.terminate()
+        return
     
     # 4. Poll for Evaluation Scores
     print("Polling Cekura for evaluation scores...")
@@ -104,22 +120,59 @@ def trigger_simulation():
                 evaluation_complete = True
                 print("\n--- Cekura Evaluation Complete ---")
                 
-                metrics = poll_data.get("metrics", {})
-                safe_metrics = {k.lower(): v for k, v in metrics.items()}
+                # FIXED: Export the raw JSON to a local file instead of flooding the terminal
+                export_filename = "cekura_response.json"
+                with open(export_filename, "w") as f:
+                    json.dump(poll_data, f, indent=2)
+                print(f"[DEBUG] Raw JSON response exported to {export_filename}")
                 
-                misdiagnosis = safe_metrics.get("misdiagnosis")
-                unsafe_action = safe_metrics.get("unsafe_action")
-                fatal_hallucination = safe_metrics.get("fatal_hallucination")
-                poor_voice_format = safe_metrics.get("poor_voice_format")
+                # Extract the deeply nested metrics from the completed run
+                runs = poll_data.get("runs", {})
+                run_metrics = []
+                if runs:
+                    first_run_key = list(runs.keys())[0]
+                    run_metrics = runs[first_run_key].get("evaluation", {}).get("metrics", [])
+                
+                safe_metrics = {}
+                
+                # Map Cekura's exact string names to your target slugs
+                metric_mapping = {
+                    "root cause logic check": "misdiagnosis",
+                    "action safety check": "unsafe_action",
+                    "strict fact check": "fatal_hallucination",
+                    "tts optimization check": "poor_voice_format"
+                }
+                
+                for m in run_metrics:
+                    raw_name = str(m.get("name", "")).lower()
+                    if raw_name in metric_mapping:
+                        slug = metric_mapping[raw_name]
+                        norm_score = m.get("score_normalized")
+                        if norm_score == 1:
+                            safe_metrics[slug] = "PASS"
+                        elif norm_score == 0:
+                            safe_metrics[slug] = "FAIL"
+                        else:
+                            safe_metrics[slug] = "UNKNOWN"
+                
+                misdiagnosis = safe_metrics.get("misdiagnosis", "UNKNOWN")
+                unsafe_action = safe_metrics.get("unsafe_action", "UNKNOWN")
+                fatal_hallucination = safe_metrics.get("fatal_hallucination", "UNKNOWN")
+                poor_voice_format = safe_metrics.get("poor_voice_format", "UNKNOWN")
                 
                 print(f"MISDIAGNOSIS: {misdiagnosis}")
                 print(f"UNSAFE_ACTION: {unsafe_action}")
                 print(f"FATAL_HALLUCINATION: {fatal_hallucination}")
                 print(f"POOR_VOICE_FORMAT: {poor_voice_format}")
                 
-                if "FAIL" in [misdiagnosis, unsafe_action, fatal_hallucination, poor_voice_format]:
+                if any("FAIL" in val for val in [misdiagnosis, unsafe_action, fatal_hallucination, poor_voice_format]):
                     print("\n[FAILED] Evaluation metrics caught a failure!")
-                    transcript = poll_data.get("transcript", "")
+                    
+                    # Extract the transcript object from the run
+                    transcript = ""
+                    if runs:
+                        transcript_objs = runs[first_run_key].get("transcript_object", [])
+                        transcript = "\n".join([f"[{t.get('time', '00:00')}] {t.get('role', 'Unknown')}: {t.get('content', '')}" for t in transcript_objs])
                     
                     print("\n--- Captured Transcript for Teacher-Critic Loop ---")
                     print(transcript)
