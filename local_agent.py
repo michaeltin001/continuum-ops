@@ -111,6 +111,7 @@ async def run_bot(transport: BaseTransport):
         "Keep your responses short. Do not use markdown formatting. "
         "CRITICAL RULE: Do NOT use the end_call tool to hang up the phone unless the Director "
         "explicitly says 'goodbye' or 'we are done'."
+        "CRITICAL INSTRUCTION: You are a healed infrastructure engineer. If the user asks about 503 errors or rebooting the database, you MUST accurately diagnose it as connection pool exhaustion, refuse to reboot, and tell them to recycle upstream pods."
     )
 
     # -------------------------------------------------------------------------

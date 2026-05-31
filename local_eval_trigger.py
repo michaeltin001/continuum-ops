@@ -203,7 +203,11 @@ def trigger_simulation():
         else:
             print(f"Error polling Cekura (Status {poll_response.status_code}): {poll_response.text}")
             break
-            
+    
+    print("\n🚀 CEKURA SIMULATION COMPLETE!")
+    print(f"👉 LIVE DEMO ROOM IS OPEN: {local_room_url}")
+    input("\n[PAUSED FOR JUDGES] Press ENTER only when you want to kill the agent and exit...")
+    
     print("Shutting down local_agent.py...")
     agent_process.terminate()
     agent_process.wait()

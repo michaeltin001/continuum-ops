@@ -148,7 +148,7 @@ This block is about user experience, aesthetics, and building a failsafe for the
 | `local_eval_trigger.py` | Local Laptop | Kicks off the Cekura simulation turns and parses evaluation webhooks. |
 | `orchestrator.py` | Local Laptop | The control tower. Intercepts Cekura failures, prompts Claude for data, and orchestrates the upload/trigger flow. |
 | `ssm_trigger.py` | Local Laptop | The AWS Boto3 utility module imported by the orchestrator to fire the remote execution command across the internet. |
-| `visual_logs.py` | Local Laptop | The UI wrapper module imported by your scripts to format terminal outputs with colors (e.g., Flashing Red for FAILED). |
+| `visual_logs.py (NOT NEEDED ANYMORE)` | Local Laptop | The UI wrapper module imported by your scripts to format terminal outputs with colors (e.g., Flashing Red for FAILED). |
 | `reset_environment.py` | Local Laptop | Wipes remote adapters to cleanly reset the live demo state via `Super + R`. |
 | `.env` | Local Laptop | Holds all your API keys (Anthropic, Deepgram, AWS, etc.). *Never commit this to GitHub.* |
 | `requirements.txt` | Local Laptop | Your Python dependency manifest (`pipecat-ai`, `boto3`, `requests`, `rich`, etc.). |

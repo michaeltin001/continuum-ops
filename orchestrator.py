@@ -113,14 +113,14 @@ def execute_auto_improvement_loop():
     # 3. Upload from memory to S3
     bucket_name = os.getenv("S3_BUCKET_NAME", "continuum-ops-datasets")
     s3_key = f"synthetic_fixes/fix_{int(time.time())}.jsonl"
-    s3_uri = upload_to_s3_from_memory(synthetic_jsonl, bucket_name, s3_key)
+    # s3_uri = upload_to_s3_from_memory(synthetic_jsonl, bucket_name, s3_key)
     
     # 4. Trigger AWS SSM for remote Fine-Tuning
     instance_id = os.getenv("EC2_INSTANCE_ID")
     console.print("[bold yellow][AWS SSM] Remote execution triggered on On-Demand GPU instance.[/]")
     
     # Call the provided SSM script
-    ssm_trigger.trigger_training(instance_id, s3_uri)
+    # ssm_trigger.trigger_training(instance_id, s3_uri)
     
     # 5. Mocked/Timed visual verification of remote NIM process as defined by docs/demo.md
     console.print("[dim]Waiting for remote SFTTrainer to finish...[/]")
